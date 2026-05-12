@@ -1,7 +1,5 @@
 import express from "express";
 import mysql from "mysql2/promise";
-import axios from "axios";
-import * as cheerio from "cheerio";
 import cors from "cors";
 import dotenv from "dotenv";
 
@@ -14,10 +12,9 @@ app.use(cors({
     "https://richardcxz.github.io",
     "http://localhost:5500",
     "http://127.0.0.1:5500"
-  ],
-  methods: ["GET", "POST", "PUT"],
-  credentials: true
+  ]
 }));
+
 app.use(express.json());
 
 const db = await mysql.createPool({
@@ -33,28 +30,22 @@ app.get("/", (req, res) => {
 });
 
 app.get("/products", async (req, res) => {
-  const [rows] = await db.query(
-    "SELECT * FROM products ORDER BY position_order ASC"
-  );
+  const [rows] = await db.query(`
+    SELECT * FROM products
+    ORDER BY favorite DESC, id DESC
+  `);
 
   res.json(rows);
 });
 
 app.post("/add", async (req, res) => {
   try {
-    const { url } = req.body;
 
-    const response = await axios.get(url);
-
-    const $ = cheerio.load(response.data);
-
-    const title =
-      $('meta[property="og:title"]').attr("content") ||
-      "Produto";
-
-    const image =
-      $('meta[property="og:image"]').attr("content") ||
-      "";
+    const {
+      title,
+      image,
+      url
+    } = req.body;
 
     let category = "Outros";
 
@@ -62,15 +53,17 @@ app.post("/add", async (req, res) => {
 
     if (
       lower.includes("mouse") ||
+      lower.includes("teclado") ||
       lower.includes("keyboard") ||
-      lower.includes("teclado")
+      lower.includes("headset")
     ) {
       category = "Setup";
     }
 
     if (
-      lower.includes("hoodie") ||
       lower.includes("camiseta") ||
+      lower.includes("hoodie") ||
+      lower.includes("moletom") ||
       lower.includes("shirt")
     ) {
       category = "Roupas";
@@ -78,41 +71,50 @@ app.post("/add", async (req, res) => {
 
     if (
       lower.includes("anime") ||
-      lower.includes("pokemon")
+      lower.includes("pokemon") ||
+      lower.includes("naruto")
     ) {
       category = "Anime";
     }
 
-    await db.query(
-      `INSERT INTO products
+    await db.query(`
+      INSERT INTO products
       (title, image, url, category)
-      VALUES (?, ?, ?, ?)`,
-      [title, image, url, category]
-    );
+      VALUES (?, ?, ?, ?)
+    `, [
+      title,
+      image,
+      url,
+      category
+    ]);
 
     res.json({
       success: true
     });
+
   } catch (err) {
-    console.log(err);
+
+    console.log(err.message);
 
     res.status(500).json({
       error: "Erro ao adicionar"
     });
+
   }
 });
 
 app.put("/favorite/:id", async (req, res) => {
-  await db.query(
-    `UPDATE products
-     SET favorite = NOT favorite
-     WHERE id = ?`,
-    [req.params.id]
-  );
+
+  await db.query(`
+    UPDATE products
+    SET favorite = NOT favorite
+    WHERE id = ?
+  `, [req.params.id]);
 
   res.json({
     success: true
   });
+
 });
 
 app.listen(3000, () => {
