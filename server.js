@@ -22,7 +22,9 @@ const db = await mysql.createPool({
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  port: process.env.DB_PORT
+  port: process.env.DB_PORT,
+  waitForConnections: true,
+  connectionLimit: 10
 });
 
 app.get("/", (req, res) => {
@@ -30,15 +32,28 @@ app.get("/", (req, res) => {
 });
 
 app.get("/products", async (req, res) => {
-  const [rows] = await db.query(`
-    SELECT * FROM products
-    ORDER BY favorite DESC, id DESC
-  `);
+  try {
 
-  res.json(rows);
+    const [rows] = await db.query(`
+      SELECT * FROM products
+      ORDER BY favorite DESC, id DESC
+    `);
+
+    res.json(rows);
+
+  } catch (err) {
+
+    console.log(err);
+
+    res.status(500).json({
+      error: "Erro ao buscar produtos"
+    });
+
+  }
 });
 
 app.post("/add", async (req, res) => {
+
   try {
 
     const {
@@ -46,6 +61,12 @@ app.post("/add", async (req, res) => {
       image,
       url
     } = req.body;
+
+    if (!title || !url) {
+      return res.status(400).json({
+        error: "Título e link são obrigatórios"
+      });
+    }
 
     let category = "Outros";
 
@@ -55,7 +76,9 @@ app.post("/add", async (req, res) => {
       lower.includes("mouse") ||
       lower.includes("teclado") ||
       lower.includes("keyboard") ||
-      lower.includes("headset")
+      lower.includes("headset") ||
+      lower.includes("monitor") ||
+      lower.includes("mousepad")
     ) {
       category = "Setup";
     }
@@ -64,7 +87,9 @@ app.post("/add", async (req, res) => {
       lower.includes("camiseta") ||
       lower.includes("hoodie") ||
       lower.includes("moletom") ||
-      lower.includes("shirt")
+      lower.includes("shirt") ||
+      lower.includes("tênis") ||
+      lower.includes("sapato")
     ) {
       category = "Roupas";
     }
@@ -72,9 +97,20 @@ app.post("/add", async (req, res) => {
     if (
       lower.includes("anime") ||
       lower.includes("pokemon") ||
-      lower.includes("naruto")
+      lower.includes("naruto") ||
+      lower.includes("hello kitty") ||
+      lower.includes("gengar")
     ) {
       category = "Anime";
+    }
+
+    if (
+      lower.includes("carro") ||
+      lower.includes("automotivo") ||
+      lower.includes("obd") ||
+      lower.includes("dash cam")
+    ) {
+      category = "Carro";
     }
 
     await db.query(`
@@ -83,7 +119,7 @@ app.post("/add", async (req, res) => {
       VALUES (?, ?, ?, ?)
     `, [
       title,
-      image,
+      image || "",
       url,
       category
     ]);
@@ -94,26 +130,107 @@ app.post("/add", async (req, res) => {
 
   } catch (err) {
 
-    console.log(err.message);
+    console.log(err);
 
     res.status(500).json({
       error: "Erro ao adicionar"
     });
 
   }
+
 });
 
 app.put("/favorite/:id", async (req, res) => {
 
-  await db.query(`
-    UPDATE products
-    SET favorite = NOT favorite
-    WHERE id = ?
-  `, [req.params.id]);
+  try {
 
-  res.json({
-    success: true
-  });
+    await db.query(`
+      UPDATE products
+      SET favorite = NOT favorite
+      WHERE id = ?
+    `, [req.params.id]);
+
+    res.json({
+      success: true
+    });
+
+  } catch (err) {
+
+    console.log(err);
+
+    res.status(500).json({
+      error: "Erro ao favoritar"
+    });
+
+  }
+
+});
+
+app.put("/edit/:id", async (req, res) => {
+
+  try {
+
+    const {
+      title,
+      image,
+      url,
+      category
+    } = req.body;
+
+    await db.query(`
+      UPDATE products
+      SET
+        title = ?,
+        image = ?,
+        url = ?,
+        category = ?
+      WHERE id = ?
+    `, [
+      title,
+      image,
+      url,
+      category,
+      req.params.id
+    ]);
+
+    res.json({
+      success: true
+    });
+
+  } catch (err) {
+
+    console.log(err);
+
+    res.status(500).json({
+      error: "Erro ao editar"
+    });
+
+  }
+
+});
+
+app.delete("/delete/:id", async (req, res) => {
+
+  try {
+
+    await db.query(`
+      DELETE FROM products
+      WHERE id = ?
+    `, [req.params.id]);
+
+    res.json({
+      success: true
+    });
+
+  } catch (err) {
+
+    console.log(err);
+
+    res.status(500).json({
+      error: "Erro ao deletar"
+    });
+
+  }
 
 });
 
